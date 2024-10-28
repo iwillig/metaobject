@@ -1,53 +1,36 @@
 (ns metaobject.main-test
   (:require [clojure.test :as t :refer [deftest testing is]]
+            [datascript.core :as d]
             [metaobject.main :as metaobj]))
 
 (def subject
   (metaobj/obj-catalog
-   {::metaobj/types
-    [(metaobj/obj-type
-      {::metaobj/name ::person
-       ::metaobj/attrs
-       [(metaobj/obj-attr {::metaobj/name ::name
-                           ::metaobj/type :db.type/string
-                           ::metaobj/obj-name ::person})
-
-        (metaobj/obj-attr {::metaobj/name ::full-name
-                           ::metaobj/type :db.type/string
-                           ::metaobj/obj-name ::person})
-
-        (metaobj/obj-ref {::metaobj/name ::emails
-                          ::metaobj/ref-obj-name ::email
-                          ::metaobj/cardinality :db.cardinality/many
-                          ::metaobj/obj-name ::person})]})
-
-     (metaobj/obj-type
-      {::metaobj/name ::email
-       ::metaobj/attrs
-       [(metaobj/obj-attr {::metaobj/name ::address
-                           ::metaobj/type :db.type/string
-                           ::metaobj/obj-name ::email})]})]}))
+   {:obj-types
+    [{:name ::person
+      :attrs
+      [{:name ::name
+        :type :db.type/string}
+       {:name ::full-name
+        :type :db.type/string}
+       {:name         ::emails
+        :ref-obj-name ::email
+        :cardinality  :db.cardinality/many}]}
+     {:name ::email
+      :attrs
+      [{:name ::address
+        :type :db.type/string}]}]}))
 
 (deftest check-okay-test
-
   (testing "Context of the test assertions"
-    #_(is (true? false))
+    (let [subject-tx (metaobj/to-schema-tx subject)]
 
-    #_(is (= {}
-           (metaobj/obj-attr {::metaobj/name ::name})))
+      (is (= {} subject))
 
-    #_(is (= {}
-           (metaobj/obj-type {::metaobj/name ::person})))
+      (is (= {}
+             subject-tx))
 
-    (is (= {}
-           (metaobj/to-schema-tx subject)))
+      (is (= {}
+             (d/create-conn subject-tx)))
 
-    (is (= {}
-           (metaobj/to-create-inputs subject)))
-
-    #_(is (= {}
-           (metaobj/obj-ref {::metaobj/obj-name ::person
-                             ::metaobj/name ::email})))
-
-
-    #_(is (= [] {}))))
+      (is (= {}
+             (metaobj/to-create-inputs subject))))))

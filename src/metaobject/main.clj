@@ -1,7 +1,9 @@
-(ns metaobject.main)
+(ns metaobject.main
+  (:require [metaobject.builders :as builders]
+            [cuerdas.core :as str]))
 
 (def one-cardinality :db.cardinality/one)
-(def many-cardinality :db.cardinality/many)
+;;(def _many-cardinality :db.cardinality/many)
 
 (def db-type-ref :db.type/ref)
 
@@ -10,7 +12,6 @@
   (to-schema-tx [self]
     "A function that takes an metaobject object and transform it into
     a datalog schema."))
-
 
 (defprotocol Obj-Inputs
   "A protocol to define transformations into mali maps that can be used
@@ -21,45 +22,18 @@
   {:db/type   :db.type/uuid
    :db/unique :db.unique/value})
 
-(defn- safe-name
-  [key-str]
-  (cond
-    (string? key-str)
-    key-str
-    (keyword? key-str)
-    (name key-str)
-    :else nil))
-
-(defn- key-from-object-name
-  [obj-name key-value]
-  (keyword (safe-name obj-name)
-           (safe-name key-value)))
-
-(defrecord ObjCatalog [types]
+(defrecord ObjCatalog [obj-types]
   Obj-Inputs
-  (to-create-inputs [self]
+  (to-create-inputs [_self]
     (into (sorted-map)
-          (map to-create-inputs types)))
+          (map to-create-inputs obj-types)))
   Obj-Schemable
   (to-schema-tx [_self]
     (into (sorted-map)
-          (map (comp second to-schema-tx) types))))
+          (map (comp second to-schema-tx) obj-types))))
 
-(defn- attr-inputs
-  [{:keys [identy type]}]
-  [(keyword (safe-name identy))
-   (keyword (safe-name type))])
 
-(defn- attr-db-schema
-  [{:keys [_identy type cardinality unique]}]
-  (merge
-   {:db/type type}
-   (when cardinality
-     {:db/cardinality cardinality})
-   (when unique
-     {:db/unique unique})))
-
-(defrecord ObjType [name attrs]
+(defrecord ObjType [name attrs snake-identy]
 
   Obj-Inputs
   (to-create-inputs [_self]
@@ -70,71 +44,97 @@
   Obj-Schemable
   (to-schema-tx [_self]
     [name
-     (into {(key-from-object-name name "public-id")
+     (into {(builders/combined-keys name "public-id")
             public-id-schema}
            (map to-schema-tx attrs))]))
 
 (defrecord ObjAttr [identy
+                    snake-identy
                     name
                     obj-name
                     type
                     cardinality]
   Obj-Inputs
   (to-create-inputs [self]
-    (attr-inputs self))
+    (builders/attr-inputs self))
 
   Obj-Schemable
   (to-schema-tx [self]
-    [identy (attr-db-schema self)]))
+    [identy (builders/attr-db-schema self)]))
 
 (defrecord ObjRef [identy
+                   snake-identy
                    type
                    obj-name
                    cardinality]
   Obj-Inputs
-  (to-create-inputs [self]
-    (attr-inputs self))
+  (to-create-inputs [_self]
+    #_(builders/attr-inputs self)
+    {})
   Obj-Schemable
   (to-schema-tx [self]
     [identy
-     (attr-db-schema self)]))
-
-(defn obj-catalog
-  [{::keys [types]}]
-  (map->ObjCatalog {:types types}))
-
-(defn obj-type
-  [{::keys [name attrs]}]
-  (map->ObjType
-   {:name  name
-    :attrs attrs}))
-
-(defn obj-attr
-  [{::keys [identy
-            obj-name
-            name
-            type
-            cardinality]}]
-  (let [new-obj-attr-identy (or (key-from-object-name obj-name name)
-                                identy)]
-    (map->ObjAttr {:identy      new-obj-attr-identy
-                   :name        name
-                   :obj-name    obj-name
-                   :type        type
-                   :cardinality (or cardinality one-cardinality)})))
+     (builders/attr-db-schema self)]))
 
 (defn obj-ref
-  [{::keys [identy
-            obj-name
-            ref-obj-name
-            name
-            cardinality]}]
-  (let [new-ref-identy (or (key-from-object-name obj-name name)
-                           identy)]
+  [{:keys [identy
+           obj-name
+           ref-obj-name
+           name
+           cardinality] :as _opts}]
+  (map->ObjRef
+   (merge
+    (builders/build-identy obj-name name identy)
+    {:type         db-type-ref
+     :ref-obj-name ref-obj-name
+     :obj-name     obj-name
+     :cardinality  (or cardinality
+                       one-cardinality)})))
 
-    (map->ObjRef {:identy       new-ref-identy
-                  :type         db-type-ref
-                  :ref-obj-name ref-obj-name
-                  :obj-name     obj-name
-                  :cardinality  (or cardinality
-                                   one-cardinality)})))
+(defn obj-attr-like?
+  [x]
+  (or (instance? ObjRef x)
+      (instance? ObjAttr x)))
+
+(defn obj-like?
+  [x]
+  (instance? ObjType x))
+
+(defn obj-attr
+  [{:keys [identy
+           obj-name
+           name
+           type
+           cardinality] :as opts}]
+  (if (:ref-obj-name opts)
+    (obj-ref opts)
+    (map->ObjAttr
+     (merge
+      (builders/build-identy obj-name name identy)
+      {:name        name
+       :obj-name    obj-name
+       :type        type
+       :cardinality (or cardinality one-cardinality)}))))
+
+(defn obj-type
+  [{:keys [name attrs]}]
+  (map->ObjType
+   {:name  name
+    :attrs (mapv
+            (fn [x]
+              (if-not (obj-attr-like? x)
+                (obj-attr (assoc x :obj-name name))
+                x))
+            attrs)
+    :snake-identy (str/snake name)}))
+
+
+(defn obj-catalog
+  [{:keys [obj-types]}]
+  (map->ObjCatalog
+   {:obj-types
+    (mapv (fn [x]
+            (if-not (obj-like? x)
+              (obj-type x)
+              x))
+          obj-types)}))
