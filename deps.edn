@@ -1,0 +1,39 @@
+{:deps
+ {org.clojure/clojure    {:mvn/version "1.12.0"}
+  datascript/datascript  {:mvn/version "1.7.3"}
+  funcool/cuerdas        {:mvn/version "2023.11.09-407"}
+  metosin/malli          {:mvn/version "0.16.4"}}
+
+ :paths ["src" "dev" "test" "resources"]
+
+ :aliases {:dev {:extra-deps {lambdaisland/kaocha           {:mvn/version "1.87.1366"}
+                              lambdaisland/kaocha-cloverage {:mvn/version "1.1.89"}
+                              lambdaisland/kaocha-junit-xml {:mvn/version "1.17.101"}
+                              cider/cider-nrepl             {:mvn/version "0.50.2"}
+                              vvvvalvalval/scope-capture    {:mvn/version "0.3.3"}
+                              org.clojure/tools.nrepl       {:mvn/version "0.2.11"}
+                              nubank/matcher-combinators    {:mvn/version "3.9.1"}
+                              org.clojure/test.check        {:mvn/version "1.1.1"}
+                              io.github.tonsky/clj-reload   {:mvn/version "0.4.0"}}}
+
+           :nrepl
+           {:extra-deps
+            {nrepl/nrepl {:mvn/version "1.3.0"}}}
+
+           :tests
+           {:extra-deps {}
+            :main-opts  ["-m" "kaocha.runner"]}
+
+           :lint
+           {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2022.09.08"}}
+            :main-opts  ["-m" "clj-kondo.main"]}
+
+
+           :codox {:extra-deps {codox/codox {:mvn/version "0.10.8"}}
+                   :metadata   {:doc/format :markdown}
+                   :exec-fn    codox.main/generate-docs
+                   :exec-args  {:source-paths ["src"]}}
+
+           :outdated
+           {:extra-deps {olical/depot {:mvn/version "1.8.4"}}
+            :main-opts  ["-m" "depot.outdated.main"]}}}
